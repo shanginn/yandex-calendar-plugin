@@ -106,7 +106,7 @@ export class YandexCalDavClient {
     const url = this.#safeUrl(urlValue);
     const headers = new Headers(init.headers);
     headers.set("Authorization", this.#authorization);
-    headers.set("User-Agent", "yandex-calendar-mcp/0.1.0");
+    headers.set("User-Agent", "yandex-calendar-mcp/0.1.1");
 
     const response = await fetch(url, {
       ...init,

@@ -33,19 +33,23 @@ codex plugin marketplace add shanginn/yandex-calendar-plugin
 codex plugin add yandex-calendar@yandex-calendar
 ```
 
-Перед запуском Codex задайте переменные окружения:
+Рекомендуемый способ для Codex Desktop — приватный файл учётных данных:
+
+```bash
+mkdir -p ~/.config/yandex-calendar-plugin
+printf '%s\n' '{"username":"you@yandex.ru","appPassword":"пароль-приложения"}' \
+  > ~/.config/yandex-calendar-plugin/credentials.json
+chmod 600 ~/.config/yandex-calendar-plugin/credentials.json
+```
+
+Плагин читает этот файл напрямую, поэтому настройка сохраняется после перезапуска приложения и компьютера. Другой путь можно указать через `YANDEX_CALENDAR_CREDENTIALS_FILE`.
+
+Для запуска из терминала по-прежнему можно использовать переменные окружения:
 
 ```bash
 export YANDEX_CALENDAR_USERNAME="you@yandex.ru"
 export YANDEX_CALENDAR_APP_PASSWORD="пароль-приложения"
 codex
-```
-
-На macOS для приложения, запускаемого не из терминала, переменные можно передать текущей пользовательской сессии:
-
-```bash
-launchctl setenv YANDEX_CALENDAR_USERNAME "you@yandex.ru"
-launchctl setenv YANDEX_CALENDAR_APP_PASSWORD "пароль-приложения"
 ```
 
 После установки откройте новую задачу Codex и попросите, например: «Покажи мои встречи на сегодня».
@@ -64,6 +68,7 @@ codex plugin add yandex-calendar@yandex-calendar
 ## Безопасность
 
 - Секреты не принимаются в аргументах MCP-инструментов и не попадают в результаты.
+- Приватный файл учётных данных должен иметь права `0600`; иначе плагин откажется его читать.
 - CalDAV URL инструментов ограничены тем же origin, который задан конфигурацией.
 - Внешний HTTP запрещён; незашифрованный localhost разрешён только тестам отдельным флагом.
 - Удаление требует `confirm=true` и помечено `destructiveHint: true`.

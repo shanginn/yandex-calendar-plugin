@@ -55,7 +55,7 @@ function failure(error: unknown) {
 
 export function createServer(): McpServer {
   const server = new McpServer(
-    { name: "yandex-calendar", version: "0.1.0" },
+    { name: "yandex-calendar", version: "0.1.1" },
     {
       instructions:
         "Сначала получите URL календаря через list_calendars. Перед изменением или удалением перечитайте событие. delete_event вызывайте только после явного подтверждения пользователя.",

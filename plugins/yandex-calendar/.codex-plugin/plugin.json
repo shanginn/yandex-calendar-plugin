@@ -1,6 +1,6 @@
 {
   "name": "yandex-calendar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Управление Яндекс Календарём через безопасный локальный MCP-сервер и CalDAV.",
   "author": {
     "name": "Nikolai Shangin",
