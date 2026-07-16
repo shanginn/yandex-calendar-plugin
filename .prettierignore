@@ -1,0 +1,8 @@
+node_modules/
+plugins/yandex-calendar/dist/
+plugins/yandex-calendar/LICENSE
+plugins/yandex-calendar/NOTICE
+plugins/yandex-calendar/THIRD_PARTY_NOTICES.txt
+LICENSE
+NOTICE
+package-lock.json

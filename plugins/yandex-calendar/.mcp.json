@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "yandex-calendar": {
+      "cwd": ".",
+      "command": "node",
+      "args": ["./dist/server.mjs"],
+      "note": "Локальный MCP-сервер Яндекс Календаря. Требует YANDEX_CALENDAR_USERNAME и YANDEX_CALENDAR_APP_PASSWORD."
+    }
+  }
+}

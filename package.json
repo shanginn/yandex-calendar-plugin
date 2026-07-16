@@ -1,0 +1,39 @@
+{
+  "name": "@shanginn/yandex-calendar-plugin",
+  "version": "0.1.0",
+  "description": "MCP plugin for Yandex Calendar over CalDAV",
+  "author": "Nikolai Shangin <shanginn@gmail.com> (https://github.com/shanginn)",
+  "license": "Apache-2.0",
+  "homepage": "https://shanginn.github.io/yandex-calendar-plugin/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shanginn/yandex-calendar-plugin.git"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/prepare-plugin.mjs && esbuild src/server.ts --bundle --platform=node --format=esm --target=node20 --outfile=plugins/yandex-calendar/dist/server.mjs --sourcemap --minify --legal-comments=external",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "check": "npm run format:check && npm run typecheck && npm run build && npm run test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "fast-xml-parser": "5.10.0",
+    "ical.js": "2.2.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "esbuild": "0.28.1",
+    "prettier": "3.9.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

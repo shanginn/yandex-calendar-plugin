@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-label="Yandex Calendar plugin">
+  <rect width="320" height="96" rx="20" fill="#fff"/>
+  <g transform="translate(16 16) scale(1)">
+    <rect x="2" y="6" width="60" height="56" rx="13" fill="#fff" stroke="#1f2937" stroke-width="4"/>
+    <path d="M4 22h56" stroke="#E44A3A" stroke-width="8"/>
+    <path d="M18 2v14M46 2v14" stroke="#1f2937" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="23" cy="37" r="4" fill="#E44A3A"/><circle cx="41" cy="37" r="4" fill="#E44A3A"/>
+    <circle cx="23" cy="51" r="4" fill="#E44A3A"/><circle cx="41" cy="51" r="4" fill="#E44A3A"/>
+  </g>
+  <text x="96" y="43" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Yandex Calendar</text>
+  <text x="96" y="69" font-family="Arial, sans-serif" font-size="16" fill="#4b5563">неофициальный MCP-плагин</text>
+</svg>

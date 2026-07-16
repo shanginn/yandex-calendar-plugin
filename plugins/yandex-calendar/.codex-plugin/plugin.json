@@ -1,0 +1,34 @@
+{
+  "name": "yandex-calendar",
+  "version": "0.1.0",
+  "description": "Управление Яндекс Календарём через безопасный локальный MCP-сервер и CalDAV.",
+  "author": {
+    "name": "Nikolai Shangin",
+    "email": "shanginn@gmail.com",
+    "url": "https://github.com/shanginn"
+  },
+  "homepage": "https://shanginn.github.io/yandex-calendar-plugin/",
+  "repository": "https://github.com/shanginn/yandex-calendar-plugin",
+  "license": "Apache-2.0",
+  "keywords": ["yandex", "calendar", "caldav", "mcp", "productivity"],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Yandex Calendar",
+    "shortDescription": "Читайте и меняйте события Яндекс Календаря.",
+    "longDescription": "Локальный плагин для Codex: список календарей и событий, создание, изменение и подтверждённое удаление встреч через официальный протокол CalDAV.",
+    "developerName": "Nikolai Shangin",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://shanginn.github.io/yandex-calendar-plugin/",
+    "privacyPolicyURL": "https://shanginn.github.io/yandex-calendar-plugin/privacy.html",
+    "termsOfServiceURL": "https://shanginn.github.io/yandex-calendar-plugin/terms.html",
+    "defaultPrompt": [
+      "Покажи мои встречи на сегодня.",
+      "Создай встречу завтра в 14:00 на один час.",
+      "Найди свободное время на этой неделе."
+    ],
+    "brandColor": "#E44A3A",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg"
+  }
+}
