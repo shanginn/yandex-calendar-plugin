@@ -156,6 +156,20 @@ describe("MCP ↔ CalDAV", () => {
       }),
       etag: `\"${etagCounter}\"`,
     });
+    resources.set(`${CALENDAR}orphan-overrides.ics`, {
+      ics: `BEGIN:VCALENDAR\r
+VERSION:2.0\r
+BEGIN:VEVENT\r
+UID:old-series\r
+SUMMARY:Старая встреча\r
+RECURRENCE-ID:20230822T063000Z\r
+DTSTART:20230822T064000Z\r
+DTEND:20230822T070000Z\r
+END:VEVENT\r
+END:VCALENDAR\r
+`,
+      etag: `\"${etagCounter}\"`,
+    });
 
     httpServer.listen(0, "127.0.0.1");
     await once(httpServer, "listening");
@@ -234,8 +248,13 @@ describe("MCP ↔ CalDAV", () => {
         end: "2026-08-01T00:00:00Z",
       },
     });
-    expect(listed.structuredContent).toMatchObject({
-      events: [{ uid: "existing", title: "Существующая встреча" }],
+    expect(listed.structuredContent).toEqual({
+      events: [
+        expect.objectContaining({
+          uid: "existing",
+          title: "Существующая встреча",
+        }),
+      ],
     });
 
     const created = await client.callTool({

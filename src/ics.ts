@@ -96,6 +96,239 @@ export function parseEvents(ics: string): CalendarEvent[] {
   return root.getAllSubcomponents("vevent").map(serializeEvent);
 }
 
+function recurrenceKey(value: ICAL.Time): string {
+  return value.isDate
+    ? `date:${value.toString()}`
+    : `time:${value.toUnixTime()}`;
+}
+
+function overlapsRange(
+  eventStart: ICAL.Time,
+  eventEnd: ICAL.Time,
+  rangeStart: Date,
+  rangeEnd: Date,
+): boolean {
+  return (
+    eventStart.toJSDate().getTime() < rangeEnd.getTime() &&
+    eventEnd.toJSDate().getTime() > rangeStart.getTime()
+  );
+}
+
+function serializeOccurrence(
+  item: ICAL.Event,
+  start: ICAL.Time,
+  end: ICAL.Time,
+  recurrenceId?: ICAL.Time,
+): CalendarEvent {
+  const component = item.component;
+  const uid = optionalText(component, "uid");
+  if (!uid) {
+    throw new Error("Событие CalDAV не содержит обязательный UID.");
+  }
+
+  const description = optionalText(component, "description");
+  const location = optionalText(component, "location");
+  const status = optionalText(component, "status");
+
+  return {
+    uid,
+    title: optionalText(component, "summary") ?? "Без названия",
+    start: timeToText(start),
+    end: timeToText(end),
+    allDay: start.isDate,
+    ...(description ? { description } : {}),
+    ...(location ? { location } : {}),
+    ...(status ? { status } : {}),
+    ...(recurrenceId ? { recurrenceId: timeToText(recurrenceId) } : {}),
+  };
+}
+
+function isCancelled(event: ICAL.Event): boolean {
+  return optionalText(event.component, "status")?.toUpperCase() === "CANCELLED";
+}
+
+const MAX_RECURRENCE_ITERATIONS = 100_000;
+
+/**
+ * Expands recurring VEVENTs and returns only instances intersecting the
+ * half-open interval [start, end). EXDATE, RECURRENCE-ID overrides and
+ * RANGE=THISANDFUTURE exceptions are handled by ICAL.Event.
+ */
+export function parseEventsInRange(
+  ics: string,
+  start: string,
+  end: string,
+): CalendarEvent[] {
+  const rangeStart = parseInstant(start, "start");
+  const rangeEnd = parseInstant(end, "end");
+  if (rangeStart >= rangeEnd) throw new Error("start должен быть раньше end.");
+
+  const root = new ICAL.Component(ICAL.parse(ics));
+  const components = root.getAllSubcomponents("vevent");
+  const masters = components.filter(
+    (component) => !component.hasProperty("recurrence-id"),
+  );
+  const overridesByUid = new Map<string, Map<string, ICAL.Component>>();
+
+  for (const component of components) {
+    const recurrenceId = component.getFirstPropertyValue("recurrence-id");
+    const uid = optionalText(component, "uid");
+    if (!(recurrenceId instanceof ICAL.Time) || !uid) continue;
+    let overrides = overridesByUid.get(uid);
+    if (!overrides) {
+      overrides = new Map();
+      overridesByUid.set(uid, overrides);
+    }
+    overrides.set(recurrenceKey(recurrenceId), component);
+  }
+
+  const result: CalendarEvent[] = [];
+  const relatedOverrideKeys = new Set<string>();
+
+  for (const component of masters) {
+    const master = new ICAL.Event(component);
+    const overrideComponents = [
+      ...(overridesByUid.get(master.uid)?.values() ?? []),
+    ];
+    const event = new ICAL.Event(component, {
+      exceptions: overrideComponents,
+      strictExceptions: true,
+    });
+
+    if (!event.isRecurring()) {
+      if (
+        !isCancelled(event) &&
+        overlapsRange(event.startDate, event.endDate, rangeStart, rangeEnd)
+      ) {
+        result.push(serializeOccurrence(event, event.startDate, event.endDate));
+      }
+      continue;
+    }
+
+    let expansionEnd = rangeEnd.getTime();
+    for (const overrideComponent of overrideComponents) {
+      const override = new ICAL.Event(overrideComponent);
+      const recurrenceId = override.recurrenceId;
+      if (!(recurrenceId instanceof ICAL.Time)) continue;
+
+      if (
+        overlapsRange(
+          override.startDate,
+          override.endDate,
+          rangeStart,
+          rangeEnd,
+        )
+      ) {
+        expansionEnd = Math.max(
+          expansionEnd,
+          recurrenceId.toJSDate().getTime() + 1,
+        );
+      }
+      if (override.modifiesFuture()) {
+        const shift =
+          override.startDate.toJSDate().getTime() -
+          recurrenceId.toJSDate().getTime();
+        if (shift < 0)
+          expansionEnd = Math.max(expansionEnd, rangeEnd.getTime() - shift);
+      }
+    }
+
+    const iterator = event.iterator();
+    let iterations = 0;
+    let occurrence: ICAL.Time | null;
+    while ((occurrence = iterator.next())) {
+      if (++iterations > MAX_RECURRENCE_ITERATIONS) {
+        throw new Error(
+          "Серия содержит слишком много повторений для безопасного разворачивания.",
+        );
+      }
+      if (occurrence.toJSDate().getTime() >= expansionEnd) break;
+
+      const details = event.getOccurrenceDetails(occurrence);
+      const key = recurrenceKey(details.recurrenceId);
+      relatedOverrideKeys.add(`${event.uid}\0${key}`);
+      if (
+        !isCancelled(details.item) &&
+        overlapsRange(details.startDate, details.endDate, rangeStart, rangeEnd)
+      ) {
+        result.push(
+          serializeOccurrence(
+            details.item,
+            details.startDate,
+            details.endDate,
+            details.recurrenceId,
+          ),
+        );
+      }
+    }
+
+    // Some providers emit an EXDATE together with its RECURRENCE-ID override,
+    // or return an override whose original instance lies outside the query.
+    // The recurrence iterator skips those, so include a matching override once.
+    for (const overrideComponent of overrideComponents) {
+      const override = new ICAL.Event(overrideComponent);
+      const recurrenceId = override.recurrenceId;
+      if (!(recurrenceId instanceof ICAL.Time)) continue;
+      const key = recurrenceKey(recurrenceId);
+      if (relatedOverrideKeys.has(`${event.uid}\0${key}`)) continue;
+      relatedOverrideKeys.add(`${event.uid}\0${key}`);
+      if (
+        !isCancelled(override) &&
+        overlapsRange(
+          override.startDate,
+          override.endDate,
+          rangeStart,
+          rangeEnd,
+        )
+      ) {
+        result.push(
+          serializeOccurrence(
+            override,
+            override.startDate,
+            override.endDate,
+            recurrenceId,
+          ),
+        );
+      }
+    }
+  }
+
+  const masterUids = new Set(
+    masters.map((component) => optionalText(component, "uid")),
+  );
+  for (const [uid, overrides] of overridesByUid) {
+    if (masterUids.has(uid)) continue;
+    for (const overrideComponent of overrides.values()) {
+      const override = new ICAL.Event(overrideComponent);
+      if (
+        !isCancelled(override) &&
+        overlapsRange(
+          override.startDate,
+          override.endDate,
+          rangeStart,
+          rangeEnd,
+        )
+      ) {
+        result.push(
+          serializeOccurrence(
+            override,
+            override.startDate,
+            override.endDate,
+            override.recurrenceId,
+          ),
+        );
+      }
+    }
+  }
+
+  return result.sort(
+    (left, right) =>
+      new Date(left.start).getTime() - new Date(right.start).getTime() ||
+      left.uid.localeCompare(right.uid) ||
+      (left.recurrenceId ?? "").localeCompare(right.recurrenceId ?? ""),
+  );
+}
+
 export function buildEventIcs(input: NewEventInput): string {
   const start = parseInstant(input.start, "start");
   const end = parseInstant(input.end, "end");

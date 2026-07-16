@@ -7,6 +7,7 @@ import type { YandexCalendarConfig } from "./config.js";
 import {
   buildEventIcs,
   parseEvents,
+  parseEventsInRange,
   updateEventIcs,
   type CalendarEvent,
   type EventPatch,
@@ -106,7 +107,7 @@ export class YandexCalDavClient {
     const url = this.#safeUrl(urlValue);
     const headers = new Headers(init.headers);
     headers.set("Authorization", this.#authorization);
-    headers.set("User-Agent", "yandex-calendar-mcp/0.1.1");
+    headers.set("User-Agent", "yandex-calendar-mcp/0.1.2");
 
     const response = await fetch(url, {
       ...init,
@@ -255,7 +256,7 @@ export class YandexCalDavClient {
       if (!item.href || !data) continue;
       const eventUrl = this.#safeUrl(item.href, calendar).toString();
       const etag = textValue(item.prop.getetag);
-      for (const event of parseEvents(data)) {
+      for (const event of parseEventsInRange(data, start, end)) {
         resources.push({ ...event, eventUrl, ...(etag ? { etag } : {}) });
       }
     }

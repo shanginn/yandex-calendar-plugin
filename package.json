@@ -1,6 +1,6 @@
 {
   "name": "@shanginn/yandex-calendar-plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP plugin for Yandex Calendar over CalDAV",
   "author": "Nikolai Shangin <shanginn@gmail.com> (https://github.com/shanginn)",
   "license": "Apache-2.0",
