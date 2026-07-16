@@ -4,7 +4,7 @@
   "description": "MCP plugin for Yandex Calendar over CalDAV",
   "author": "Nikolai Shangin <shanginn@gmail.com> (https://github.com/shanginn)",
   "license": "Apache-2.0",
-  "homepage": "https://shanginn.github.io/yandex-calendar-plugin/",
+  "homepage": "https://shanginn.ru/yandex-calendar-plugin/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shanginn/yandex-calendar-plugin.git"

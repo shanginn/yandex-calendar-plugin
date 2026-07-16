@@ -7,7 +7,7 @@
     "email": "shanginn@gmail.com",
     "url": "https://github.com/shanginn"
   },
-  "homepage": "https://shanginn.github.io/yandex-calendar-plugin/",
+  "homepage": "https://shanginn.ru/yandex-calendar-plugin/",
   "repository": "https://github.com/shanginn/yandex-calendar-plugin",
   "license": "Apache-2.0",
   "keywords": ["yandex", "calendar", "caldav", "mcp", "productivity"],
@@ -19,9 +19,9 @@
     "developerName": "Nikolai Shangin",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
-    "websiteURL": "https://shanginn.github.io/yandex-calendar-plugin/",
-    "privacyPolicyURL": "https://shanginn.github.io/yandex-calendar-plugin/privacy.html",
-    "termsOfServiceURL": "https://shanginn.github.io/yandex-calendar-plugin/terms.html",
+    "websiteURL": "https://shanginn.ru/yandex-calendar-plugin/",
+    "privacyPolicyURL": "https://shanginn.ru/yandex-calendar-plugin/privacy.html",
+    "termsOfServiceURL": "https://shanginn.ru/yandex-calendar-plugin/terms.html",
     "defaultPrompt": [
       "Покажи мои встречи на сегодня.",
       "Создай встречу завтра в 14:00 на один час.",
