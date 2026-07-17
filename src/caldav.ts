@@ -5,6 +5,10 @@ import { randomUUID } from "node:crypto";
 
 import type { YandexCalendarConfig } from "./config.js";
 import {
+  assertCalendarIsNotDefault,
+  resolveCurrentCalendarForDeletion,
+} from "./calendar-safety.js";
+import {
   buildEventIcs,
   parseEvents,
   parseEventsInRange,
@@ -49,6 +53,12 @@ export interface DeleteEventInput {
   expectedEtag?: string;
 }
 
+export interface DeleteCalendarResult {
+  deleted: true;
+  calendarUrl: string;
+  name: string;
+}
+
 class DavHttpError extends Error {
   constructor(
     public readonly status: number,
@@ -75,6 +85,11 @@ function toIcalUtc(value: string): string {
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}Z$/, "Z");
+}
+
+function hrefValue(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  return textValue((value as Record<string, unknown>).href);
 }
 
 export class YandexCalDavClient {
@@ -107,7 +122,7 @@ export class YandexCalDavClient {
     const url = this.#safeUrl(urlValue);
     const headers = new Headers(init.headers);
     headers.set("Authorization", this.#authorization);
-    headers.set("User-Agent", "yandex-calendar-mcp/0.1.2");
+    headers.set("User-Agent", "yandex-calendar-mcp/0.1.3");
 
     const response = await fetch(url, {
       ...init,
@@ -151,12 +166,7 @@ export class YandexCalDavClient {
          <d:prop><d:current-user-principal/></d:prop>
        </d:propfind>`,
     );
-    const href = textValue(
-      (
-        responses[0]?.prop["current-user-principal"] as
-          Record<string, unknown> | undefined
-      )?.href,
-    );
+    const href = hrefValue(responses[0]?.prop["current-user-principal"]);
     if (href) return this.#safeUrl(href);
 
     return this.#safeUrl(
@@ -174,16 +184,43 @@ export class YandexCalDavClient {
          <d:prop><c:calendar-home-set/></d:prop>
        </d:propfind>`,
     );
-    const href = textValue(
-      (
-        responses[0]?.prop["calendar-home-set"] as
-          Record<string, unknown> | undefined
-      )?.href,
-    );
+    const href = hrefValue(responses[0]?.prop["calendar-home-set"]);
     if (!href) {
       throw new Error("CalDAV не вернул адрес хранилища календарей.");
     }
     return this.#safeUrl(href, principalUrl);
+  }
+
+  async #discoverDefaultCalendarUrl(): Promise<string | undefined> {
+    const principalUrl = await this.#discoverPrincipalUrl();
+    const principalResponses = await this.#propfind(
+      principalUrl,
+      "0",
+      `<?xml version="1.0" encoding="utf-8"?>
+       <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+         <d:prop><c:schedule-inbox-URL/></d:prop>
+       </d:propfind>`,
+    );
+    const inboxHref = hrefValue(
+      principalResponses[0]?.prop["schedule-inbox-URL"],
+    );
+    if (!inboxHref) return undefined;
+
+    const inboxUrl = this.#safeUrl(inboxHref, principalUrl);
+    const inboxResponses = await this.#propfind(
+      inboxUrl,
+      "0",
+      `<?xml version="1.0" encoding="utf-8"?>
+       <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+         <d:prop><c:schedule-default-calendar-URL/></d:prop>
+       </d:propfind>`,
+    );
+    const defaultHref = hrefValue(
+      inboxResponses[0]?.prop["schedule-default-calendar-URL"],
+    );
+    return defaultHref
+      ? this.#safeUrl(defaultHref, inboxUrl).toString()
+      : undefined;
   }
 
   async listCalendars(): Promise<CalendarInfo[]> {
@@ -353,5 +390,21 @@ export class YandexCalDavClient {
       [200, 204],
     );
     return { deleted: true, eventUrl: eventUrl.toString() };
+  }
+
+  async deleteCalendar(calendarUrl: string): Promise<DeleteCalendarResult> {
+    this.#safeUrl(calendarUrl);
+
+    const calendars = await this.listCalendars();
+    const calendar = resolveCurrentCalendarForDeletion(calendars, calendarUrl);
+    const defaultCalendarUrl = await this.#discoverDefaultCalendarUrl();
+    assertCalendarIsNotDefault(calendar, defaultCalendarUrl);
+
+    await this.#request(calendar.url, { method: "DELETE" }, [200, 204]);
+    return {
+      deleted: true,
+      calendarUrl: calendar.url,
+      name: calendar.name,
+    };
   }
 }

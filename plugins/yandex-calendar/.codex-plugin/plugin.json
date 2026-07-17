@@ -1,6 +1,6 @@
 {
   "name": "yandex-calendar",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Управление Яндекс Календарём через безопасный локальный MCP-сервер и CalDAV.",
   "author": {
     "name": "Nikolai Shangin",
@@ -14,8 +14,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yandex Calendar",
-    "shortDescription": "Читайте и меняйте события Яндекс Календаря.",
-    "longDescription": "Локальный плагин для Codex: список календарей и событий, создание, изменение и подтверждённое удаление встреч через официальный протокол CalDAV.",
+    "shortDescription": "Управляйте событиями и календарями Яндекса.",
+    "longDescription": "Локальный плагин для Codex: список календарей и событий, создание, изменение и подтверждённое удаление встреч, а также безопасное удаление календарей через официальный протокол CalDAV.",
     "developerName": "Nikolai Shangin",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],

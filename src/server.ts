@@ -6,6 +6,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod/v4";
 
 import { YandexCalDavClient } from "./caldav.js";
+import {
+  captureCalendarList,
+  requireFreshCalendarUrl,
+  type CalendarListSnapshot,
+} from "./calendar-safety.js";
 import { loadConfig } from "./config.js";
 
 const isoDateTime = z
@@ -54,11 +59,12 @@ function failure(error: unknown) {
 }
 
 export function createServer(): McpServer {
+  let calendarListSnapshot: CalendarListSnapshot | undefined;
   const server = new McpServer(
-    { name: "yandex-calendar", version: "0.1.2" },
+    { name: "yandex-calendar", version: "0.1.3" },
     {
       instructions:
-        "Сначала получите URL календаря через list_calendars. Перед изменением или удалением перечитайте событие. delete_event вызывайте только после явного подтверждения пользователя.",
+        "Сначала получите URL календаря через list_calendars. Перед изменением или удалением перечитайте событие. delete_event вызывайте только после явного подтверждения пользователя. Перед delete_calendar обязательно заново вызовите list_calendars и передайте точный calendar_url с confirm=true.",
     },
   );
 
@@ -81,6 +87,7 @@ export function createServer(): McpServer {
         const calendars = await new YandexCalDavClient(
           loadConfig(),
         ).listCalendars();
+        calendarListSnapshot = captureCalendarList(calendars);
         return success({ calendars });
       } catch (error) {
         return failure(error);
@@ -260,6 +267,42 @@ export function createServer(): McpServer {
               : {}),
           }),
         );
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_calendar",
+    {
+      title: "Удалить календарь",
+      description:
+        "Безвозвратно удаляет календарь и его содержимое. Требует свежий list_calendars, точный calendar_url из его ответа и confirm=true. Основной и последний календарь защищены.",
+      inputSchema: z.object({
+        calendar_url: resourceUrl,
+        confirm: z.literal(true).describe("Явное подтверждение удаления"),
+      }),
+      outputSchema: z.object({
+        deleted: z.literal(true),
+        calendarUrl: z.string().url(),
+        name: z.string(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+    },
+    async ({ calendar_url }) => {
+      try {
+        requireFreshCalendarUrl(calendarListSnapshot, calendar_url);
+        const result = await new YandexCalDavClient(
+          loadConfig(),
+        ).deleteCalendar(calendar_url);
+        calendarListSnapshot = undefined;
+        return success({ ...result });
       } catch (error) {
         return failure(error);
       }

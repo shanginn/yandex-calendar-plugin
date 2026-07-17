@@ -1,6 +1,6 @@
 {
   "name": "@shanginn/yandex-calendar-plugin",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "MCP plugin for Yandex Calendar over CalDAV",
   "author": "Nikolai Shangin <shanginn@gmail.com> (https://github.com/shanginn)",
   "license": "Apache-2.0",
@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build",
     "test": "vitest run",
+    "verify:live:delete-calendar": "node scripts/verify-live-delete-calendar.mjs",
     "check": "npm run format:check && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {

@@ -19,7 +19,10 @@ const USERNAME = "test@yandex.ru";
 const PASSWORD = "calendar-app-password";
 const PRINCIPAL = `/principals/users/${USERNAME}/`;
 const HOME = `/calendars/${USERNAME}/`;
+const INBOX = `${HOME}inbox/`;
 const CALENDAR = `${HOME}events-default/`;
+const TEMP_CALENDAR = `${HOME}events-delete-test/`;
+const ALREADY_DELETED_CALENDAR = `${HOME}events-already-deleted/`;
 const EXPECTED_AUTH = `Basic ${Buffer.from(`${USERNAME}:${PASSWORD}`).toString("base64")}`;
 
 function multistatus(responses: string): string {
@@ -45,6 +48,8 @@ async function readBody(request: IncomingMessage): Promise<string> {
 
 describe("MCP ↔ CalDAV", () => {
   const resources = new Map<string, { ics: string; etag: string }>();
+  const calendars = new Map<string, { name: string; color?: string }>();
+  const deletedCalendarPaths: string[] = [];
   let etagCounter = 1;
   let baseUrl = "";
   let client: Client;
@@ -76,24 +81,44 @@ describe("MCP ↔ CalDAV", () => {
           multistatus(
             propResponse(
               PRINCIPAL,
-              `<c:calendar-home-set><d:href>${HOME}</d:href></c:calendar-home-set>`,
+              `<c:calendar-home-set><d:href>${HOME}</d:href></c:calendar-home-set><c:schedule-inbox-URL><d:href>${INBOX}</d:href></c:schedule-inbox-URL>`,
+            ),
+          ),
+        );
+        return;
+      }
+      if (request.method === "PROPFIND" && path === INBOX) {
+        response.writeHead(207, { "Content-Type": "application/xml" });
+        response.end(
+          multistatus(
+            propResponse(
+              INBOX,
+              `<d:resourcetype><d:collection/><c:schedule-inbox/></d:resourcetype><c:schedule-default-calendar-URL><d:href>${CALENDAR}</d:href></c:schedule-default-calendar-URL>`,
             ),
           ),
         );
         return;
       }
       if (request.method === "PROPFIND" && path === HOME) {
+        const calendarResponses = [...calendars.entries()]
+          .map(([calendarPath, calendar]) =>
+            propResponse(
+              calendarPath,
+              `<d:displayname>${calendar.name}</d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype>${
+                calendar.color
+                  ? `<ic:calendar-color>${calendar.color}</ic:calendar-color>`
+                  : ""
+              }`,
+            ),
+          )
+          .join("");
         response.writeHead(207, { "Content-Type": "application/xml" });
         response.end(
           multistatus(
             propResponse(
               HOME,
               `<d:resourcetype><d:collection/></d:resourcetype>`,
-            ) +
-              propResponse(
-                CALENDAR,
-                `<d:displayname>Основной</d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype><ic:calendar-color>#ffcc00</ic:calendar-color>`,
-              ),
+            ) + calendarResponses,
           ),
         );
         return;
@@ -141,12 +166,22 @@ describe("MCP ↔ CalDAV", () => {
         response.writeHead(204).end();
         return;
       }
+      if (request.method === "DELETE" && calendars.has(path)) {
+        calendars.delete(path);
+        deletedCalendarPaths.push(path);
+        for (const eventPath of resources.keys()) {
+          if (eventPath.startsWith(path)) resources.delete(eventPath);
+        }
+        response.writeHead(204).end();
+        return;
+      }
 
       response.writeHead(404).end();
     },
   );
 
   beforeAll(async () => {
+    calendars.set(CALENDAR, { name: "Основной", color: "#ffcc00" });
     resources.set(`${CALENDAR}existing.ics`, {
       ics: buildEventIcs({
         uid: "existing",
@@ -202,7 +237,7 @@ END:VCALENDAR\r
     await once(httpServer, "close");
   });
 
-  it("объявляет пять инструментов с корректными safety-аннотациями", async () => {
+  it("объявляет шесть инструментов с корректными safety-аннотациями", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([
       "list_calendars",
@@ -210,6 +245,7 @@ END:VCALENDAR\r
       "create_event",
       "update_event",
       "delete_event",
+      "delete_calendar",
     ]);
     expect(
       tools.find((tool) => tool.name === "list_events")?.annotations,
@@ -222,6 +258,13 @@ END:VCALENDAR\r
     ).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,
+    });
+    expect(
+      tools.find((tool) => tool.name === "delete_calendar")?.annotations,
+    ).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
     });
   });
 
@@ -323,6 +366,93 @@ END:VCALENDAR\r
         type: "text",
         text: expect.stringContaining("confirm"),
       }),
+    ]);
+  });
+
+  it("безопасно удаляет только актуальный тестовый календарь", async () => {
+    calendars.set(TEMP_CALENDAR, { name: "Codex delete test" });
+
+    await client.callTool({ name: "list_calendars", arguments: {} });
+    const withoutConfirmation = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${TEMP_CALENDAR}`,
+      },
+    });
+    expect(withoutConfirmation.isError).toBe(true);
+    expect(withoutConfirmation.content).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("confirm") }),
+    ]);
+
+    const wrongUrl = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${HOME}not-listed/`,
+        confirm: true,
+      },
+    });
+    expect(wrongUrl.isError).toBe(true);
+    expect(wrongUrl.content).toEqual([
+      expect.objectContaining({
+        text: expect.stringContaining("точно совпадать"),
+      }),
+    ]);
+
+    calendars.set(ALREADY_DELETED_CALENDAR, { name: "Уже удалённый" });
+    await client.callTool({ name: "list_calendars", arguments: {} });
+    calendars.delete(ALREADY_DELETED_CALENDAR);
+    const alreadyDeleted = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${ALREADY_DELETED_CALENDAR}`,
+        confirm: true,
+      },
+    });
+    expect(alreadyDeleted.isError).toBe(true);
+    expect(alreadyDeleted.content).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("уже удалён") }),
+    ]);
+
+    await client.callTool({ name: "list_calendars", arguments: {} });
+    const primaryDeletion = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${CALENDAR}`,
+        confirm: true,
+      },
+    });
+    expect(primaryDeletion.isError).toBe(true);
+    expect(primaryDeletion.content).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("основной") }),
+    ]);
+
+    await client.callTool({ name: "list_calendars", arguments: {} });
+    const deleted = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${TEMP_CALENDAR}`,
+        confirm: true,
+      },
+    });
+    expect(deleted.structuredContent).toEqual({
+      deleted: true,
+      calendarUrl: `${baseUrl.slice(0, -1)}${TEMP_CALENDAR}`,
+      name: "Codex delete test",
+    });
+    expect(calendars.has(TEMP_CALENDAR)).toBe(false);
+    expect(deletedCalendarPaths).toContain(TEMP_CALENDAR);
+
+    await client.callTool({ name: "list_calendars", arguments: {} });
+    const lastCalendarDeletion = await client.callTool({
+      name: "delete_calendar",
+      arguments: {
+        calendar_url: `${baseUrl.slice(0, -1)}${CALENDAR}`,
+        confirm: true,
+      },
+    });
+    expect(lastCalendarDeletion.isError).toBe(true);
+    expect(lastCalendarDeletion.content).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("последний") }),
     ]);
   });
 
